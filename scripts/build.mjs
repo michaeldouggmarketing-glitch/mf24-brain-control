@@ -6,6 +6,8 @@ for (const path of [
   'api/v1/health.js',
   'api/v1/dashboard.js',
   'api/v1/brain/preview.js',
+  'api/v1/audio/transcribe.js',
   'lib/brain-client.js',
+  'lib/audio.js',
 ]) await access(path);
 console.log('Build validation passed');

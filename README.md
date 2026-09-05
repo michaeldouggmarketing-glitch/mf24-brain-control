@@ -20,6 +20,10 @@ Endpoints de escrita exigem `Authorization: Bearer <key>` ou `X-API-Key`. A chav
 
 O painel consulta a Edge Function `mf24-brain-core` com a chave publicável do Supabase. Essa chave não concede acesso de serviço: ações administrativas continuam exigindo JWT `service_role`, e o RPC de inventário agregado é revogado para `anon` e `authenticated`.
 
+### Áudio
+
+`POST /api/v1/audio/transcribe` aceita JSON com `audio_url` HTTPS ou `audio_base64`, `mime_type`, `duration_ms`, `filename` e `channel`. O arquivo é validado, limitado, transcrito no servidor e descartado; somente hash, tamanho, duração, modelo, latência e resultado operacional podem ser registrados em `audio_events`. O retorno contém transcrição, interpretação e prévia, nunca uma escrita automática no ledger.
+
 ### n8n
 
 Envie ao endpoint WhatsApp: `event_id`, `phone`, `message_type`, `text` ou `audio_url`, e `timestamp`. Reutilize o mesmo `event_id` em retries. O retorno informa `duplicate` e nunca grava diretamente no ledger.
