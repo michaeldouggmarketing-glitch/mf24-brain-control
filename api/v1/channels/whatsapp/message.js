@@ -36,7 +36,11 @@ export default handler(async (req, res, id) => {
       subject_hash:identity.subject_hash, requires_openai:!process.env.OPENAI_API_KEY,
       idempotency_persistence:claim.persistence};
   } else {
-    const result = await orchestrate(input.text, {channel:'whatsapp'});
+    const result = await orchestrate(input.text, {
+      channel:'whatsapp',
+      mf24UserId:identity.mf24_user_id,
+      mf24SpaceId:identity.mf24_space_id,
+    });
     response = {request_id:id, duplicate:false, processed:true, channel:'whatsapp',
       mf24_user_id:identity.mf24_user_id, mf24_space_id:identity.mf24_space_id,
       subject_hash:identity.subject_hash, idempotency_persistence:claim.persistence, ...result,
