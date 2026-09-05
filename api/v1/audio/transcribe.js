@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import {handler} from '../../../lib/handler.js';
-import {body, json, method, auth} from '../../../lib/http.js';
+import {body, json, method} from '../../../lib/http.js';
+import {requireApi} from '../../../lib/api-auth.js';
 import {decodeAudioBase64, fetchAudio, transcribeAudio, validateAudioMeta} from '../../../lib/audio.js';
 import {orchestrate} from '../../../lib/orchestrator.js';
 import {callBrainAdmin} from '../../../lib/brain-client.js';
@@ -21,7 +22,7 @@ async function recordTelemetry(payload) {
 
 export default handler(async (req, res, id) => {
   if (!method(req, res)) return;
-  auth(req, 'audio:transcribe');
+  requireApi(req, 'audio:transcribe');
   if (!process.env.OPENAI_API_KEY) {
     return json(res, 503, {request_id:id, error:'openai_not_configured', audio_pipeline:'ready_for_secret', raw_audio_retained:false});
   }
