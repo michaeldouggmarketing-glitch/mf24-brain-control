@@ -9,5 +9,7 @@ for (const path of [
   'api/v1/audio/transcribe.js',
   'lib/brain-client.js',
   'lib/audio.js',
+  'lib/idempotency.js',
+  'supabase/functions/mf24-brain-core/index.ts',
 ]) await access(path);
 console.log('Build validation passed');

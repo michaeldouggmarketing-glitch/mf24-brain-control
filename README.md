@@ -26,7 +26,7 @@ O painel consulta a Edge Function `mf24-brain-core` com a chave publicável do S
 
 ### n8n
 
-Envie ao endpoint WhatsApp: `event_id`, `phone`, `message_type`, `text` ou `audio_url`, e `timestamp`. Reutilize o mesmo `event_id` em retries. O retorno informa `duplicate` e nunca grava diretamente no ledger.
+Envie ao endpoint WhatsApp: `event_id`, `phone`, `message_type`, `text` ou `audio_url`, e `timestamp`. Reutilize o mesmo `event_id` em retries. O retorno informa `duplicate` e `idempotency_persistence`. Com `MF24_BRAIN_SERVICE_ROLE_KEY`, a deduplicação persiste por 24 horas no Supabase; sem ela, o fallback é efêmero por instância. O endpoint nunca grava diretamente no ledger.
 
 ## Segurança
 
