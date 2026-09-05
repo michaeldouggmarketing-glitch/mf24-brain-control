@@ -1,7 +1,8 @@
 import {handler} from '../../../../lib/handler.js';
-import {body, json, method, auth, hash} from '../../../../lib/http.js';
+import {body, json, method, auth} from '../../../../lib/http.js';
 import {orchestrate} from '../../../../lib/orchestrator.js';
 import {claimIdempotency, completeIdempotency} from '../../../../lib/idempotency.js';
+import {resolveChannelIdentity} from '../../../../lib/channel-links.js';
 
 export default handler(async (req, res, id) => {
   if (!method(req, res)) return;
@@ -26,14 +27,18 @@ export default handler(async (req, res, id) => {
       idempotency_persistence:claim.persistence});
   }
 
+  const identity = await resolveChannelIdentity({channel:'whatsapp', externalSubject:input.phone});
   let response;
   if (input.message_type === 'audio') {
     response = {request_id:id, duplicate:false, processed:false, next:'audio_transcription',
-      requires_openai:!process.env.OPENAI_API_KEY, idempotency_persistence:claim.persistence};
+      mf24_user_id:identity.mf24_user_id, mf24_space_id:identity.mf24_space_id,
+      subject_hash:identity.subject_hash, requires_openai:!process.env.OPENAI_API_KEY,
+      idempotency_persistence:claim.persistence};
   } else {
     const result = await orchestrate(input.text, {channel:'whatsapp'});
     response = {request_id:id, duplicate:false, processed:true, channel:'whatsapp',
-      subject_hash:hash(input.phone), idempotency_persistence:claim.persistence, ...result,
+      mf24_user_id:identity.mf24_user_id, mf24_space_id:identity.mf24_space_id,
+      subject_hash:identity.subject_hash, idempotency_persistence:claim.persistence, ...result,
       validation:{ledger_written:false, confirmation_required:true}};
   }
   await completeIdempotency({idempotencyKey:claim.idempotencyKey, payloadHash:claim.payloadHash, response});
