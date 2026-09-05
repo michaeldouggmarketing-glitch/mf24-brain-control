@@ -11,13 +11,13 @@ export default handler(async (req, res, id) => {
   json(res, connected ? 200 : 503, {
     request_id: id,
     status: connected ? 'operational' : 'degraded',
-    version: '1.1.0',
+    version: '1.2.0',
     services: {
       api: 'healthy',
       brain_supabase: connected ? 'healthy' : 'unavailable',
       mf24_supabase: connected ? 'healthy_via_brain' : 'unverified',
       openai: openai ? 'configured' : 'not_configured',
-      n8n: process.env.N8N_WEBHOOK_URL ? 'configured' : 'not_configured',
+      n8n: (process.env.MF24_N8N_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL) ? 'configured' : 'not_configured',
       audio: openai ? 'ready' : 'pending_openai',
     },
     brain: connected ? {edge_version: brain.version, ...brain.status} : {error: brain.error},
