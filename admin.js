@@ -1,0 +1,105 @@
+(() => {
+  const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const metric = (label,value,note='') => `<article class="card"><span class="label">${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></article>`;
+  const money = (minor,currency='BRL') => {
+    const amount = Number(minor || 0) / 100;
+    try { return new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(amount); }
+    catch { return `${currency} ${amount.toFixed(2)}`; }
+  };
+  let cache;
+
+  async function snapshot(force=false) {
+    if (!force && cache && Date.now() - cache.at < 30000) return cache.data;
+    const key = sessionStorage.getItem('mf24-admin-key') || '';
+    if (!key) throw Object.assign(new Error('admin_key_required'), {code:'key'});
+    const response = await fetch('/api/v1/admin/snapshot', {headers:{'x-admin-key':key}});
+    if (response.status === 401) {
+      sessionStorage.removeItem('mf24-admin-key');
+      throw Object.assign(new Error('admin_key_invalid'), {code:'key'});
+    }
+    if (!response.ok) throw new Error(`Admin API: HTTP ${response.status}`);
+    const data = await response.json();
+    cache = {at:Date.now(),data};
+    return data;
+  }
+
+  function gate(section,message='Use o token administrativo configurado no servidor. Ele fica somente nesta sessão do navegador.') {
+    const root = document.querySelector('#view');
+    root.innerHTML = `<div class="grid"><article class="card hero full"><span class="pill">ADMIN SEPARADO</span><h2>${esc(section)}</h2><p>${esc(message)}</p><div class="test"><input id="adminKey" type="password" autocomplete="off" placeholder="Token administrativo"><button id="adminLoad" class="primary">Conectar</button></div><pre id="adminOut">Nenhum segredo é exibido ou persistido no servidor por esta tela.</pre></article></div>`;
+    document.querySelector('#adminLoad').onclick = async () => {
+      const value = document.querySelector('#adminKey').value.trim();
+      if (!value) return;
+      sessionStorage.setItem('mf24-admin-key', value);
+      cache = null;
+      await window.generic(section);
+    };
+  }
+
+  function integrationCards(integrations={}) {
+    return Object.entries(integrations).map(([name,status]) => metric(name,String(status).toUpperCase(),status === 'configured' ? 'servidor configurado' : 'ação externa pendente')).join('');
+  }
+
+  function renderClients(data) {
+    const c = data.mf24?.data?.counts;
+    if (!c) return `<article class="card full"><span class="warn">MF24 PROD indisponível</span><p>${esc(data.mf24?.error || 'Configure MF24_PROD_SERVICE_ROLE_KEY no servidor.')}</p></article>`;
+    return `${metric('Identidades',c.identities,'contagem real no MF24 PROD')}${metric('Workspaces',c.workspaces,'Minha Vida / Nós / Meu Negócio')}${metric('Membros',c.members,'vínculos de workspace')}${metric('Entitlements',c.entitlements,'acessos por produto')}${metric('Grants',c.grants,'liberações')}${metric('Mensagens',c.messages,'histórico privado; conteúdo não exposto')}${metric('Sessões',c.sessions,'assistente')}`;
+  }
+
+  function renderFinance(data) {
+    const mf = data.mf24?.data;
+    if (!mf) return `<article class="card full"><span class="warn">MF24 PROD indisponível</span><p>${esc(data.mf24?.error || 'Configure o acesso somente-leitura do servidor.')}</p></article>`;
+    const totals = mf.finance?.totals || [];
+    return `${metric('Lançamentos',mf.counts.transactions,'ledger oficial do MF24')}${metric('Compromissos',mf.counts.commitments,'contas futuras')}${metric('Janela',mf.finance.recent_transactions,`${mf.window.from} → ${mf.window.to}`)}${totals.map(row => metric(`${row.direction} · ${row.currency}`,money(row.amount_minor,row.currency),`${row.count} lançamento(s)`)).join('')}<article class="card full"><span class="label">Privacidade</span><h3>Somente agregados</h3><p>Descrições, mensagens, payloads privados e texto financeiro bruto não saem deste endpoint.</p></article>`;
+  }
+
+  function renderLearning(data) {
+    const o = data.brain?.data?.overview || {};
+    const r = o.runtime || {};
+    return `${metric('Aprendizado 24h',r.learning_events_24h ?? '—','eventos observados')}${metric('Correções 24h',r.corrections_24h ?? '—','feedbacks')}${metric('Auto promoção',o.system?.auto_promote_enabled ? 'ATIVA' : 'DESLIGADA','deve permanecer desligada por padrão')}${metric('Modo de privacidade',o.system?.privacy_mode || '—','Brain global isolado')}<article class="card full"><span class="label">Regra de aprendizado</span><h3>Particular fica particular</h3><p>Correções pessoais e memória do usuário permanecem no MF24. Só conhecimento genérico pode ser candidato ao banco global.</p></article>`;
+  }
+
+  function renderOpenAI(data) {
+    const o = data.brain?.data?.overview || {};
+    const routes = Array.isArray(o.routes) ? o.routes : [];
+    return `${metric('OpenAI',data.integrations?.openai || 'not_configured','segredo somente no servidor')}${metric('Custo IA 24h',`US$ ${Number(o.runtime?.estimated_ai_cost_usd_24h || 0).toFixed(4)}`,'telemetria Brain')}${routes.map(route => metric(route.layer_key,route.model || '—',`${route.provider || '—'} · ${route.enabled ? 'ativo' : 'inativo'}`)).join('')}<article class="card full"><span class="label">Roteamento</span><h3>IA só quando o MF24 não resolver</h3><p>Motor nativo → conhecimento global → IA econômica → IA avançada. Respostas da OpenAI não são armazenadas e nenhum lançamento é gravado sem confirmação.</p></article>`;
+  }
+
+  function renderAudio(data) {
+    const o = data.brain?.data?.overview || {};
+    return `${metric('Áudios 24h',o.runtime?.audio_events_24h ?? '—','telemetria real')}${metric('Transcrição',data.integrations?.openai === 'configured' ? 'PRONTA' : 'BLOQUEADA','depende de OPENAI_API_KEY')}${metric('Retenção', 'NÃO', 'áudio bruto descartado')}<article class="card full"><span class="label">Pipeline</span><h3>WhatsApp/áudio → transcrição → Brain</h3><p>O áudio é validado por tipo, tamanho e duração; depois a transcrição passa pelas mesmas regras de confirmação do texto.</p></article>`;
+  }
+
+  function renderWhatsApp(data) {
+    const o = data.brain?.data?.overview || {};
+    const service = (o.services || []).find(item => item.service_key === 'n8n_whatsapp');
+    return `${metric('n8n / WhatsApp',data.integrations?.n8n || service?.status || 'not_configured','provedor ainda pode ser ligado depois')}${metric('Brain service role',data.integrations?.brain_service_role || 'not_configured','necessária para idempotência persistente e vínculo')}${metric('Replay protection','ATIVA','janela e timestamp validados')}<article class="card full"><span class="label">Identidade e idempotência</span><h3>Número nunca vira identidade por suposição</h3><p>Cada telefone é transformado em hash e precisa estar vinculado a um usuário/espaço MF24. O mesmo event_id não pode criar duas operações.</p></article>`;
+  }
+
+  function renderAudit(data) {
+    const o = data.brain?.data?.overview || {};
+    const r = o.runtime || {};
+    return `${metric('Requisições 24h',r.requests_24h ?? '—','auditadas por hash')}${metric('Sem IA 24h',r.resolved_without_ai_24h ?? '—','economia de tokens')}${metric('Sucesso 24h',r.successful_requests_24h ?? '—','telemetria')}${metric('Texto bruto','NÃO','privacy_mode strict')}<article class="card full"><span class="label">Trilha de auditoria</span><h3>Interpretação ≠ execução</h3><p>O Brain registra camada, confiança, custo/latência e hashes. O ledger oficial só muda no executor autorizado do MF24 após confirmação.</p></article>`;
+  }
+
+  window.generic = async function(section) {
+    const root = document.querySelector('#view');
+    root.innerHTML = '<div class="grid"><article class="card full">Consultando dados administrativos reais…</article></div>';
+    try {
+      const data = await snapshot();
+      const integrations = integrationCards(data.integrations);
+      let content = '';
+      if (section === 'Clientes') content = renderClients(data);
+      else if (section === 'Financeiro') content = renderFinance(data);
+      else if (section === 'Aprendizado') content = renderLearning(data);
+      else if (section === 'OpenAI / Custos') content = renderOpenAI(data);
+      else if (section === 'Áudio') content = renderAudio(data);
+      else if (section === 'WhatsApp / n8n') content = renderWhatsApp(data);
+      else if (section === 'Auditoria') content = renderAudit(data);
+      root.innerHTML = `<div class="grid"><article class="card hero full"><span class="pill">DADOS REAIS</span><h2>${esc(section)}</h2><p>Leitura administrativa ao vivo. Nenhum dado é alterado por esta visualização.</p><button id="adminDisconnect" class="nav">Desconectar administração</button></article>${content || integrations}</div>`;
+      document.querySelector('#adminDisconnect').onclick = () => { sessionStorage.removeItem('mf24-admin-key'); cache=null; gate(section); };
+    } catch (error) {
+      if (error.code === 'key') gate(section, error.message === 'admin_key_invalid' ? 'Token inválido. Use o token administrativo configurado no Vercel.' : undefined);
+      else root.innerHTML = `<div class="grid"><article class="card full"><span class="warn">Falha administrativa</span><pre>${esc(error.message)}</pre></article></div>`;
+    }
+  };
+})();
