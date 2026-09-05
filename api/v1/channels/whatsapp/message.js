@@ -1,12 +1,13 @@
 import {handler} from '../../../../lib/handler.js';
-import {body, json, method, auth} from '../../../../lib/http.js';
+import {body, json, method} from '../../../../lib/http.js';
+import {requireApi} from '../../../../lib/api-auth.js';
 import {orchestrate} from '../../../../lib/orchestrator.js';
 import {claimIdempotency, completeIdempotency} from '../../../../lib/idempotency.js';
 import {resolveChannelIdentity} from '../../../../lib/channel-links.js';
 
 export default handler(async (req, res, id) => {
   if (!method(req, res)) return;
-  auth(req, 'whatsapp:message');
+  requireApi(req, 'whatsapp:message');
   const input = await body(req);
   if (!input.event_id || !input.phone || !input.timestamp || !['text', 'audio'].includes(input.message_type)) {
     return json(res, 400, {request_id:id, error:'invalid_payload'});
