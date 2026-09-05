@@ -2,8 +2,8 @@ import crypto from 'node:crypto';
 import {handler} from '../../../lib/handler.js';
 import {body, json, method, auth} from '../../../lib/http.js';
 import {decodeAudioBase64, fetchAudio, transcribeAudio, validateAudioMeta} from '../../../lib/audio.js';
-import {interpret} from '../../../lib/brain.js';
-import {callBrainAdmin, resolveWithBrain} from '../../../lib/brain-client.js';
+import {orchestrate} from '../../../lib/orchestrator.js';
+import {callBrainAdmin} from '../../../lib/brain-client.js';
 
 function extension(mimeType) {
   return ({'audio/mpeg':'mp3','audio/mp4':'m4a','audio/m4a':'m4a','audio/ogg':'ogg','application/ogg':'ogg','audio/webm':'webm','audio/wav':'wav','audio/x-wav':'wav','audio/aac':'aac','audio/flac':'flac'})[mimeType] || 'audio';
@@ -40,7 +40,7 @@ export default handler(async (req, res, id) => {
   }
 
   validateAudioMeta({mimeType: audio.mimeType, durationMs: input.duration_ms, maxDurationSeconds});
-  const model = process.env.MF24_AUDIO_MODEL || 'gpt-transcribe';
+  const model = process.env.MF24_AUDIO_MODEL || 'gpt-4o-mini-transcribe';
   const started = Date.now();
   const audioHash = crypto.createHash('sha256').update(audio.bytes).digest('hex');
 
@@ -52,37 +52,33 @@ export default handler(async (req, res, id) => {
       apiKey: process.env.OPENAI_API_KEY,
       model,
     });
-    const local = interpret(transcript.text);
-    const global = await resolveWithBrain(transcript.text).catch(() => null);
+    const interpretation = await orchestrate(transcript.text, {channel:input.channel || 'whatsapp'});
     const latencyMs = Date.now() - started;
     const telemetry = await recordTelemetry({
-      request_id: id,
-      channel: input.channel || 'whatsapp',
-      audio_sha256: audioHash,
-      mime_type: audio.mimeType,
-      size_bytes: audio.bytes.length,
-      duration_ms: input.duration_ms ?? (transcript.duration ? Math.round(Number(transcript.duration) * 1000) : null),
-      language: 'pt',
-      provider: 'openai',
+      request_id:id,
+      mf24_user_id:typeof input.mf24_user_id === 'string' ? input.mf24_user_id : null,
+      mf24_space_id:typeof input.mf24_space_id === 'string' ? input.mf24_space_id : null,
+      channel:input.channel || 'whatsapp',
+      audio_sha256:audioHash,
+      mime_type:audio.mimeType,
+      size_bytes:audio.bytes.length,
+      duration_ms:input.duration_ms ?? (transcript.duration ? Math.round(Number(transcript.duration) * 1000) : null),
+      language:'pt',
+      provider:'openai',
       model,
-      latency_ms: latencyMs,
-      estimated_cost_usd: null,
-      success: true,
-      metadata: {raw_audio_retained:false, source:input.audio_url ? 'url' : 'base64'},
+      latency_ms:latencyMs,
+      estimated_cost_usd:null,
+      success:true,
+      metadata:{raw_audio_retained:false, source:input.audio_url ? 'url' : 'base64'},
     });
     json(res, 200, {
-      request_id: id,
-      transcript: transcript.text,
-      interpretation: local,
-      global_knowledge: global ? {
-        suggested_layer: global.suggested_layer,
-        confidence: global.confidence,
-        entities: global.entities?.candidates || [],
-        rules: global.rules?.matches || [],
-      } : null,
-      validation: {ledger_written:false, confirmation_required:true},
+      request_id:id,
+      transcript:transcript.text,
+      interpretation,
+      validation:{ledger_written:false, confirmation_required:true},
       telemetry,
-      audio: {model, size_bytes:audio.bytes.length, duration_ms:input.duration_ms ?? null, raw_audio_retained:false},
+      audio:{model, size_bytes:audio.bytes.length, duration_ms:input.duration_ms ?? null, raw_audio_retained:false},
+      privacy:{raw_audio_retained:false, raw_financial_text_stored:false, openai_response_stored:false},
     });
   } catch (error) {
     await recordTelemetry({
