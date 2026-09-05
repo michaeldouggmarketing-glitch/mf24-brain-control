@@ -1,0 +1,2 @@
+import {handler} from '../../../lib/handler.js';import {body,json,method,auth} from '../../../lib/http.js';import {interpret} from '../../../lib/brain.js';
+export default handler(async(req,res,id)=>{if(!method(req,res))return;auth(req);if(process.env.MF24_BRAIN_ENABLED==='false')return json(res,503,{request_id:id,error:'brain_disabled',fallback:'mf24_native'});const b=await body(req);const out=interpret(b.text,{today:b.today});json(res,200,{request_id:id,...out,validation:{ledger_written:false,confirmation_required:true}})});

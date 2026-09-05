@@ -1,0 +1,2 @@
+import {handler} from '../../../lib/handler.js';import {json,method,auth} from '../../../lib/http.js';
+export default handler(async(req,res,id)=>{if(!method(req,res))return;auth(req,'audio:transcribe');if(!process.env.OPENAI_API_KEY)return json(res,503,{request_id:id,error:'openai_not_configured',audio_pipeline:'ready_for_secret',raw_audio_retained:false});json(res,501,{request_id:id,error:'multipart_transcription_activation_pending',raw_audio_retained:false})});
