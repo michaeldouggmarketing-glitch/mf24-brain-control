@@ -38,7 +38,10 @@ test('valid MF24 session is independently resolved to its real user and workspac
   const authCall = calls.find(call => call.url.endsWith('/auth/v1/user'));
   assert.equal(authCall.init.headers.authorization, 'Bearer user-jwt');
   const memberCall = calls.find(call => call.url.includes('mf24_workspace_members'));
-  assert.match(memberCall.url, /user_id=eq%5C?\.?00000000|user_id=eq\.00000000/);
+  const memberUrl = new URL(memberCall.url);
+  assert.equal(memberUrl.searchParams.get('user_id'), 'eq.00000000-0000-4000-8000-000000000001');
+  assert.equal(memberUrl.searchParams.get('space_id'), 'eq.personal:real');
+  assert.equal(memberUrl.searchParams.get('status'), 'eq.active');
 });
 
 test('invalid session is rejected before private context can be loaded', async () => {
